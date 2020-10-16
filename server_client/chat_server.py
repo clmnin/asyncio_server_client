@@ -3,18 +3,19 @@ from typing import *
 
 import asyncio
 import sys
-
+from chat_streams import split_lines
 
 async def handle_connection(
-    reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+) -> None:
     addr = writer.get_extra_info("peername")
-    while message := await reader.read(100):
+    async for message in split_lines(reader):
         text = message.decode()
         print(f"Received {text!r} from {addr!r}")
         print(f"Sending {text!r}")
         writer.write(message)
         await writer.drain()
-        if text == "quit\n":
+        if text == "quit":
             break
     print("Closing the connection")
     writer.close()
