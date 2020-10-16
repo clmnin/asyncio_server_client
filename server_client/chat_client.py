@@ -6,7 +6,7 @@ import sys
 import contextlib
 import aiofiles
 
-from chat_streams import split_lines, write
+from chat_streams import split_lines, write, handle_writes
 
 
 async def handle_reads(reader: asyncio.StreamReader) -> None:
@@ -16,19 +16,26 @@ async def handle_reads(reader: asyncio.StreamReader) -> None:
         if text == "quit\n" or text == "quit":
             break
 
+async def stream_file_to_queue(file: IO[str], queue: asyncio.Queue[bytes]) -> None:
+    loop = asyncio.get_event_loop()
+    async for message in aiofiles.threadpool.wrap(file, loop=loop):
+        await queue.put(message.encode())
 
 async def send_file(file: IO[str]) -> None:
+    write_queue: asyncio.Queue[bytes] = asyncio.Queue()
     reader, writer = await asyncio.open_connection("127.0.0.1", 8888)
     read_handler = asyncio.create_task(handle_reads(reader))
-    loop = asyncio.get_event_loop()
-    # previously we used a blocking for loop here, because of that
-    # we had a blocking call that prevented read (which is an async task)
-    async for message in aiofiles.threadpool.wrap(file, loop=loop):
-        await write(writer, message.encode())
-    read_handler.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await read_handler
+    write_handler = asyncio.create_task(handle_writes(writer, write_queue))
+    copy_handler = asyncio.create_task(stream_file_to_queue(file, write_queue))
+    done, pending = await asyncio.wait(
+        [read_handler, write_handler, copy_handler],
+        return_when=asyncio.FIRST_COMPLETED
+    )
     print("Closing the connection")
+    for task in pending:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
     writer.close()
 
 if __name__ == "__main__":

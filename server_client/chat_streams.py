@@ -30,3 +30,14 @@ async def write(writer: asyncio.StreamWriter, message: bytes) -> None:
         if ch == 10:
             print()
     await writer.drain()
+
+
+async def handle_writes(
+    writer: asyncio.StreamWriter, queue: asyncio.Queue[bytes]
+) -> None:
+    try:
+        while (message := await queue.get()) != b"":
+            await write(writer, message)
+    finally:
+        await writer.drain()
+        writer.close()
