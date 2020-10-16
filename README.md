@@ -1,4 +1,4 @@
-# Import AsycIO
+# Import AsyncIO
 
 This is a learning exercise where I followed [ambv](github.com/ambv)'s tutorial on the asyncio and its internals.
 
